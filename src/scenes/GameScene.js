@@ -128,6 +128,12 @@ class GameScene extends Phaser.Scene {
         graphics.generateTexture('aura_light', 64, 64);
         graphics.destroy();
 
+        // --- GENERAR TEXTURA PARA PARTÍCULAS ---
+        const particleGraphics = this.make.graphics({x: 0, y: 0, add: false});
+        particleGraphics.fillStyle(0xffffff, 1);
+        particleGraphics.fillRect(0, 0, 10, 10);
+        particleGraphics.generateTexture('pixel_part', 10, 10);
+
         // --- DATOS ---
         this.playerHP = 12;
         this.maxHP = 12;
@@ -232,6 +238,35 @@ class GameScene extends Phaser.Scene {
                 });
             }
         }
+    }
+
+    triggerDeathParticles(x, y, color) {
+        // 1. FLASH DE IMPACTO (Destello breve para resaltar la eliminación)
+        this.cameras.main.flash(50, 200, 200, 200); 
+        this.cameras.main.shake(150, 0.015); // Un poco más de temblor
+
+        // 2. CREAR EMISOR DE PARTÍCULAS POTENCIADO
+        // Nota: Usamos 'emitting: false' para controlarlo manualmente con explode()
+        const emitter = this.add.particles(x, y, 'pixel_part', {
+            speed: { min: 100, max: 400 }, // Velocidad explosiva alta
+            angle: { min: 0, max: 360 },   // En todas direcciones
+            scale: { start: 3, end: 0 },   // Empiezan GRANDES (3x) y se reducen
+            alpha: { start: 1, end: 0 },   // Se desvanecen suavemente
+            lifespan: { min: 600, max: 1000 }, // Duran hasta 1 segundo
+            gravityY: 0,                   // Sin gravedad (explosión pura en el espacio)
+            tint: color,                   // Color del enemigo
+            blendMode: 'ADD',              // Modo "Luz" (hace que brillen más)
+            emitting: false                // Esperar a la orden de explosión
+        });
+
+        // 3. ¡EXPLOSIÓN!
+        // Lanzamos 60 partículas de golpe
+        emitter.explode(60); 
+
+        // 4. Limpieza de memoria
+        this.time.delayedCall(1500, () => {
+            emitter.destroy();
+        });
     }
 
     update(time, delta) {
@@ -608,6 +643,10 @@ class GameScene extends Phaser.Scene {
 
         this.physics.pause(); 
         this.combatContainer.setVisible(true);
+
+        this.combatEnemy.setVisible(true);
+        this.combatEnemy.setAlpha(1);
+
         this.enemyHP = enemyHP;
         this.maxEnemyHP = enemyHP;
         this.isBossFight = isBoss;
@@ -733,6 +772,7 @@ class GameScene extends Phaser.Scene {
                 if (this.passiveDefense > 0) damage = Math.max(1, damage - this.passiveDefense);
                 
                 this.playerHP -= damage;
+                this.sound.play('sfx_hit_player');
                 this.updateHUD();
                 
                 this.cameras.main.shake(150, 0.01);
@@ -756,6 +796,15 @@ class GameScene extends Phaser.Scene {
         if (this.enemyTimer) this.enemyTimer.remove();
         this.combatLog.setText("VICTORIA.");
         this.diceContainer.removeAll(true); 
+
+        // Usamos el color del enemigo (Rojo por defecto, o el del jefe)
+        const particleColor = this.isBossFight ? ZONES[this.currentZoneIndex].bossColor : 0xff0000;
+        
+        // Lanzamos partículas desde el centro del enemigo
+        this.triggerDeathParticles(this.combatEnemy.x, this.combatEnemy.y, particleColor);
+        
+        // Ocultamos al enemigo INMEDIATAMENTE para que parezca que explotó
+        this.combatEnemy.setVisible(false);
 
         if (this.passiveTimeGain > 0) {
             this.globalTime += this.passiveTimeGain;
@@ -862,6 +911,8 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
+        this.sound.play('sfx_dice', { volume: 0.8 });
+
         const spacing = 150;
         for (let i = 0; i < 3; i++) {
             const x = (this.scale.width / 2) + ((i - 1) * spacing);
@@ -932,6 +983,7 @@ class GameScene extends Phaser.Scene {
                 if (this.isRerollMode) {
                     if (this.rerollsAvailable > 0) {
                         this.rerollsAvailable--;
+                        this.sound.play('sfx_dice', { volume: 0.8, rate: 1.2 });
                         this.activeDiceValues[index] = Phaser.Math.Between(1, 6);
                         this.blockedDiceIndex = -1; 
                         this.rollDice(); 
@@ -963,7 +1015,7 @@ class GameScene extends Phaser.Scene {
         switch(faceData.type) {
             case 'FAIL': this.cameras.main.shake(100, 0.005); this.showFloatingText(x, y - 50, "FALLO", '#888888'); break;
             case 'DEF': const heal = faceData.val; this.playerHP = Math.min(this.playerHP + heal, this.maxHP); this.updateHUD(); this.showFloatingText(this.combatPlayer.x, this.combatPlayer.y - 50, `+${heal} HP`, '#00ff00'); break;
-            case 'ATK': let dmg = faceData.val + this.passiveBonusDmg; this.damageEnemy(dmg); this.showFloatingText(this.combatEnemy.x, this.combatEnemy.y, `-${dmg}`, '#ff0000'); break;
+            case 'ATK': let dmg = faceData.val + this.passiveBonusDmg; this.damageEnemy(dmg); this.sound.play('sfx_hit_enemy'); this.showFloatingText(this.combatEnemy.x, this.combatEnemy.y, `-${dmg}`, '#ff0000'); break;
             case 'HACK': const time = faceData.val; this.globalTime += time; this.updateHUD(); this.showFloatingText(this.scale.width - 200, 50, `+${time}s`, '#00ffff'); break;
         }
     }

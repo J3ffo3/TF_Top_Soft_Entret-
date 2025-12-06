@@ -18,6 +18,9 @@ class PreloadScene extends Phaser.Scene {
         this.load.audio('mundo4', 'assets/mundo_4.wav');
         this.load.audio('gameover', 'assets/menu-gameover.wav');
         this.load.audio('win', 'assets/menu-win.wav');
+        this.load.audio('sfx_dice', 'assets/rolldice.wav');
+        this.load.audio('sfx_hit_enemy', 'assets/hit_enemy.mp3');
+        this.load.audio('sfx_hit_player', 'assets/hit_player.mp3');
     }
 
     create() {
